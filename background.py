@@ -26,8 +26,8 @@ def is_valid(user):
 def booking_job():
     users = aws.get_all_users()
 
-    tomorrow = datetime.today() + timedelta(days=1)
-    in_seven_days = (tomorrow + timedelta(days=7)).date()
+    today = datetime.today()
+    in_seven_days = (today + timedelta(days=7)).date()
     weekday = in_seven_days.weekday()
 
     institutions = api.get_institutions()
@@ -35,25 +35,6 @@ def booking_job():
 
     for inst in institutions:
         intervals[inst] = api.get_intervals(inst)
-
-    # intervals = {
-    #     'Bibliotheca Albertina': [{'from': '08:00', 'until': '23:45', 'day': None},
-    #                               {'from': '10:00', 'until': '18:00', 'day': '1'}],
-    #     'Bibliothek Erziehungs- und Sportwissenschaft': [{'from': '08:00', 'until': '22:00', 'day': None}],
-    #     'Bibliothek Klassische Archäologie /Ur-und Frühgeschichte': [
-    #         {'from': '10:00', 'until': '16:00', 'day': None}],
-    #     'Bibliothek Kunst': [{'from': '10:00', 'until': '16:00', 'day': None}],
-    #     'Bibliothek Medizin/Naturwissenschaften': [{'from': '08:00', 'until': '23:45', 'day': None}],
-    #     'Bibliothek Musik': [{'from': '10:00', 'until': '16:00', 'day': None}],
-    #     'Bibliothek Rechtswissenschaft - Recht I': [{'from': '08:00', 'until': '22:00', 'day': None},
-    #                                                 {'from': '10:00', 'until': '16:00', 'day': '7'}],
-    #     'Bibliothek Rechtswissenschaft - Recht II': [{'from': '08:00', 'until': '22:00', 'day': None},
-    #                                                  {'from': '10:00', 'until': '16:00', 'day': '7'}],
-    #     'Bibliothek Regionalwissenschaften': [{'from': '10:00', 'until': '16:00', 'day': None}],
-    #     'Bibliothek Veterinärmedizin': [{'from': '09:00', 'until': '18:00', 'day': None}],
-    #     'Campus-Bibliothek': [{'from': '08:00', 'until': '23:45', 'day': None},
-    #                           {'from': '10:00', 'until': '18:00', 'day': '1'}]
-    # }
 
     for user in users:
         if is_valid(user):
@@ -84,17 +65,15 @@ def booking_job():
             preferences["from_time"] = from_time.strftime("%H:%M")
             preferences["to_time"] = until_time.strftime("%H:%M")
 
-            api.book(credentials, preferences, str(in_seven_days))
+            result = api.book(credentials, preferences, str(in_seven_days))
+
+            logger.info(result)
 
 
 def start():
-    tomorrow = datetime.today() + timedelta(days=1)
-    tomorrow = tomorrow.replace(minute=1, hour=0, second=0, microsecond=0)
+    today = datetime.today()
+    today = today.replace(minute=1, hour=0, second=0, microsecond=0)
 
     sched = BackgroundScheduler()
-    sched.add_job(booking_job, 'interval', hours=24, start_date=tomorrow)
+    sched.add_job(booking_job, 'interval', hours=24, start_date=today)
     sched.start()
-
-
-if __name__ == "__main__":
-    booking_job()

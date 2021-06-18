@@ -107,22 +107,8 @@ def book(credentials, preferences, date_string):
 
     booking = session.post('https://seats.ub.uni-leipzig.de/booking-internal/booking/booking', data=payload_booking)
 
-    print(booking.json())
+    result = booking.json()
 
     session.close()
 
-
-if __name__ == "__main__":
-    credentials = {
-        "readernumber": "505812-0",
-        "password": "27111996"
-    }
-    preferences = {
-        "institution": "Campus-Bibliothek",
-        "area": "no selection",
-        "fitting": ["mit Strom", "kein PC"],
-        "from_time": "14:01",
-        "to_time": "14:05"
-    }
-
-    book(credentials, preferences, "2021-06-17")
+    return result
