@@ -245,6 +245,20 @@ def main() -> None:
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
+
+    book_now_handler = ConversationHandler(
+        entry_points=[CommandHandler("now", now)],
+        states={
+            INSTITUTION: [CallbackQueryHandler(now_institution)],
+            AREA: [CallbackQueryHandler(now_area)],
+            FITTING: [CallbackQueryHandler(now_fitting)],
+            DATE: [MessageHandler(Filters.regex('^(3[01]|[12][0-9]|0?[1-9])\.(1[012]|0?[1-9])\.((?:19|20)\d{2})$'), now_date)],
+            FROM_TIME: [MessageHandler(Filters.regex('^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'), now_from_time)],
+            TO_TIME: [MessageHandler(Filters.regex('^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'), now_to_time_now)]
+        },
+        fallbacks=[CommandHandler('cancel', cancel)]
+    )
+
     dispatcher.add_handler(CommandHandler('start', start))
     dispatcher.add_handler(CommandHandler('help', help_command))
     dispatcher.add_handler(CommandHandler('on', on))
@@ -253,6 +267,7 @@ def main() -> None:
 
     dispatcher.add_handler(credentials_handler)
     dispatcher.add_handler(preferences_handler)
+    dispatcher.add_handler(book_now_handler)
     updater.start_polling()
     updater.idle()
 
