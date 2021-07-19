@@ -92,6 +92,18 @@ def update_active(chat_id, value):
     )
     return response
 
+def get_raw_data(chat_id):
+    dynamodb = boto3.resource('dynamodb', aws_access_key_id=AWS_ACCESS_KEY, aws_secret_access_key=AWS_SECRET_KEY,
+                              region_name='eu-central-1')
+    table = dynamodb.Table('bibbot_user')
+
+    try:
+        response = table.get_item(Key={'chat_id': str(chat_id)})
+    except Exception:
+        pass
+    else:
+        item = response["Item"]
+        return item
 
 def get_data(chat_id):
     dynamodb = boto3.resource('dynamodb', aws_access_key_id=AWS_ACCESS_KEY, aws_secret_access_key=AWS_SECRET_KEY,
