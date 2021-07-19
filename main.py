@@ -3,8 +3,9 @@ import api
 import aws
 import background
 import os
-from typing import List
-from telegram import InlineKeyboardButton,ReplyKeyboardRemove, Update, InlineKeyboardMarkup
+import spammer
+from datetime import datetime
+from telegram import InlineKeyboardButton, ReplyKeyboardRemove, Update, InlineKeyboardMarkup
 from telegram.ext import (
     Updater,
     CommandHandler,
@@ -77,8 +78,8 @@ def bib_pw(update: Update, context: CallbackContext):
         update.message.reply_text("Super, das hat geklappt!")
 
         creds = {
-        "readernumber": context.user_data["readernumber"],
-        "password": context.user_data["password"],
+            "readernumber": context.user_data["readernumber"],
+            "password": context.user_data["password"],
         }
 
         aws.update_credentials(update.message.chat_id, creds)
@@ -171,7 +172,7 @@ def from_time(update: Update, context: CallbackContext):
 def to_time(update: Update, context: CallbackContext):
     context.user_data["to_time"] = update.message.text
 
-    intervals = api.get_intervals(context.user_data["institution"])
+    # intervals = api.get_intervals(context.user_data["institution"])
 
     update.message.reply_text(
         "Das wars!\n\n"
@@ -203,9 +204,9 @@ def now(update: Update, context: CallbackContext):
 
 def now_institution(update: Update, context: CallbackContext):
     query = update.callback_query
-    context.user_data["institution"] = query.data
+    context.user_data["now_institution"] = query.data
 
-    areas = api.get_areas(context.user_data["institution"])
+    areas = api.get_areas(context.user_data["now_institution"])
 
     keyboard = [[InlineKeyboardButton(a, callback_data=str(a))] for a in areas]
 
@@ -218,10 +219,10 @@ def now_institution(update: Update, context: CallbackContext):
 
 def now_area(update: Update, context: CallbackContext):
     query = update.callback_query
-    context.user_data["area"] = query.data
+    context.user_data["now_area"] = query.data
 
-    context.user_data["fitting"] = []
-    context.user_data["no_selected_fitting"] = api.get_fittings()
+    context.user_data["now_fitting"] = []
+    context.user_data["now_no_selected_fitting"] = api.get_fittings()
 
     keyboard = [[InlineKeyboardButton(f, callback_data=str(f))] for f in api.get_fittings()]
 
@@ -236,16 +237,17 @@ def now_fitting(update: Update, context: CallbackContext):
     query = update.callback_query
 
     if query.data == "Fertig":
-        intervals = api.get_intervals(context.user_data["institution"])
+        intervals = api.get_intervals(context.user_data["now_institution"])
         pretty_intervals = api.prettfiy_intervals(intervals)
         query.answer()
-        query.edit_message_text(f"{pretty_intervals}\n\nBitte gebe eine Startzeit ein (hh:mm)")
+        query.edit_message_text(f"{pretty_intervals}\n\nBitte gebe ein Datum an (dd.mm.yyyy)")
         return NOW_DATE
 
     else:
-        context.user_data["fitting"].append(query.data)
-        context.user_data["no_selected_fitting"].remove(query.data)
-        keyboard = [[InlineKeyboardButton(f, callback_data=str(f))] for f in context.user_data["no_selected_fitting"]]
+        context.user_data["now_fitting"].append(query.data)
+        context.user_data["now_no_selected_fitting"].remove(query.data)
+        keyboard = [[InlineKeyboardButton(f, callback_data=str(f))] for f in
+                    context.user_data["now_no_selected_fitting"]]
 
         query.answer()
         query.edit_message_text("Bitte wähle weitere Ausstattung",
@@ -254,43 +256,44 @@ def now_fitting(update: Update, context: CallbackContext):
 
 
 def now_date(update: Update, context: CallbackContext):
-    context.user_data["from_time"] = update.message.text
 
-    update.message.reply_text("Bitte gebe eine Endzeit ein")
+    context.user_data["now_date"] = str(datetime.strptime(update.message.text, "%d.%m.%Y").date())
+
+    update.message.reply_text("Bitte gebe eine Startzeit ein (hh:mm)")
     return NOW_FROM_TIME
 
 
 def now_from_time(update: Update, context: CallbackContext):
-    context.user_data["from_time"] = update.message.text
+    context.user_data["now_from_time"] = update.message.text
 
     update.message.reply_text("Bitte gebe eine Endzeit ein")
     return NOW_TO_TIME
 
 
 def now_to_time(update: Update, context: CallbackContext):
-    context.user_data["to_time"] = update.message.text
-
-    intervals = api.get_intervals(context.user_data["institution"])
+    context.user_data["now_to_time"] = update.message.text
 
     update.message.reply_text(
-        "Das wars!\n\n"
-        "Schalte den Bot jetzt mit /on an."
+        "Das wars\n\n"
+        "Der Bot benachrichtigt dich, wenn ein Platz gefunden wurde."
     )
+    spam_req = {
+        "chat_id": update.message.chat_id,
+        "date_string": context.user_data["now_date"],
+        "prefs": {"institution": context.user_data["now_institution"],
+                  "area": context.user_data["now_area"],
+                  "fitting": context.user_data["now_fitting"],
+                  "from_time": context.user_data["now_from_time"],
+                  "to_time": context.user_data["now_to_time"]
+                  }
+    }
 
-    prefs = {"institution": context.user_data["institution"],
-             "area": context.user_data["area"],
-             "fitting": context.user_data["fitting"],
-             "from_time": context.user_data["from_time"],
-             "to_time": context.user_data["to_time"]
-             }
-
-    aws.update_preferences(update.message.chat_id, prefs)
+    spammer.add_request(spam_req)
 
     return ConversationHandler.END
 
 
 def on(update: Update, context: CallbackContext):
-
     aws.update_active(update.message.chat_id, True)
 
     update.message.reply_text(
@@ -299,7 +302,6 @@ def on(update: Update, context: CallbackContext):
 
 
 def off(update: Update, context: CallbackContext):
-
     aws.update_active(update.message.chat_id, False)
 
     update.message.reply_text(
@@ -312,8 +314,8 @@ def show(update: Update, context: CallbackContext):
 
 
 def main() -> None:
-
     background.start()
+    spammer.start()
 
     updater = Updater(TOKEN)
     dispatcher = updater.dispatcher
@@ -345,9 +347,10 @@ def main() -> None:
             NOW_INSTITUTION: [CallbackQueryHandler(now_institution)],
             NOW_AREA: [CallbackQueryHandler(now_area)],
             NOW_FITTING: [CallbackQueryHandler(now_fitting)],
-            NOW_DATE: [MessageHandler(Filters.regex('^(3[01]|[12][0-9]|0?[1-9])\.(1[012]|0?[1-9])\.((?:19|20)\d{2})$'), now_date)],
+            NOW_DATE: [MessageHandler(Filters.regex('^(3[01]|[12][0-9]|0?[1-9])\.(1[012]|0?[1-9])\.((?:19|20)\d{2})$'),
+                                      now_date)],
             NOW_FROM_TIME: [MessageHandler(Filters.regex('^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'), now_from_time)],
-            NOW_TO_TIME: [MessageHandler(Filters.regex('^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'), now_to_time_now)]
+            NOW_TO_TIME: [MessageHandler(Filters.regex('^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'), now_to_time)]
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
