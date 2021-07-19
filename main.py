@@ -25,13 +25,7 @@ TOKEN = os.environ["TELEGRAM_TOKEN"]
 
 BIBID, BIBPW = range(2)
 INSTITUTION, AREA, FITTING, FROM_TIME, TO_TIME = range(5)
-
-
-def build_keyboard(current_list: List[int]) -> InlineKeyboardMarkup:
-    """Helper function to build the next inline keyboard."""
-    return InlineKeyboardMarkup.from_column(
-        [InlineKeyboardButton(str(i), callback_data=(i, current_list)) for i in range(1, 6)]
-    )
+NOW_INSTITUTION, NOW_AREA, NOW_FITTING, NOW_DATE, NOW_FROM_TIME, NOW_TO_TIME = range(6)
 
 
 def start(update: Update, context: CallbackContext):
@@ -196,6 +190,105 @@ def to_time(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 
+def now(update: Update, context: CallbackContext):
+    institutions = api.get_institutions()
+
+    keyboard = [[InlineKeyboardButton(i, callback_data=str(i))] for i in institutions]
+
+    update.message.reply_text("Bitte wähle einen Standort",
+                              reply_markup=InlineKeyboardMarkup(keyboard, one_time_keyboard=True))
+
+    return NOW_INSTITUTION
+
+
+def now_institution(update: Update, context: CallbackContext):
+    query = update.callback_query
+    context.user_data["institution"] = query.data
+
+    areas = api.get_areas(context.user_data["institution"])
+
+    keyboard = [[InlineKeyboardButton(a, callback_data=str(a))] for a in areas]
+
+    query.answer()
+    query.edit_message_text("Bitte wähle eine Area",
+                            reply_markup=InlineKeyboardMarkup(keyboard, one_time_keyboard=True))
+
+    return NOW_AREA
+
+
+def now_area(update: Update, context: CallbackContext):
+    query = update.callback_query
+    context.user_data["area"] = query.data
+
+    context.user_data["fitting"] = []
+    context.user_data["no_selected_fitting"] = api.get_fittings()
+
+    keyboard = [[InlineKeyboardButton(f, callback_data=str(f))] for f in api.get_fittings()]
+
+    query.answer()
+    query.edit_message_text("Bitte wähle eine Ausstattung",
+                            reply_markup=InlineKeyboardMarkup(keyboard, one_time_keyboard=True))
+
+    return NOW_FITTING
+
+
+def now_fitting(update: Update, context: CallbackContext):
+    query = update.callback_query
+
+    if query.data == "Fertig":
+        intervals = api.get_intervals(context.user_data["institution"])
+        pretty_intervals = api.prettfiy_intervals(intervals)
+        query.answer()
+        query.edit_message_text(f"{pretty_intervals}\n\nBitte gebe eine Startzeit ein (hh:mm)")
+        return NOW_DATE
+
+    else:
+        context.user_data["fitting"].append(query.data)
+        context.user_data["no_selected_fitting"].remove(query.data)
+        keyboard = [[InlineKeyboardButton(f, callback_data=str(f))] for f in context.user_data["no_selected_fitting"]]
+
+        query.answer()
+        query.edit_message_text("Bitte wähle weitere Ausstattung",
+                                reply_markup=InlineKeyboardMarkup(keyboard, one_time_keyboard=True))
+        return NOW_FITTING
+
+
+def now_date(update: Update, context: CallbackContext):
+    context.user_data["from_time"] = update.message.text
+
+    update.message.reply_text("Bitte gebe eine Endzeit ein")
+    return NOW_FROM_TIME
+
+
+def now_from_time(update: Update, context: CallbackContext):
+    context.user_data["from_time"] = update.message.text
+
+    update.message.reply_text("Bitte gebe eine Endzeit ein")
+    return NOW_TO_TIME
+
+
+def now_to_time(update: Update, context: CallbackContext):
+    context.user_data["to_time"] = update.message.text
+
+    intervals = api.get_intervals(context.user_data["institution"])
+
+    update.message.reply_text(
+        "Das wars!\n\n"
+        "Schalte den Bot jetzt mit /on an."
+    )
+
+    prefs = {"institution": context.user_data["institution"],
+             "area": context.user_data["area"],
+             "fitting": context.user_data["fitting"],
+             "from_time": context.user_data["from_time"],
+             "to_time": context.user_data["to_time"]
+             }
+
+    aws.update_preferences(update.message.chat_id, prefs)
+
+    return ConversationHandler.END
+
+
 def on(update: Update, context: CallbackContext):
 
     aws.update_active(update.message.chat_id, True)
@@ -249,12 +342,12 @@ def main() -> None:
     book_now_handler = ConversationHandler(
         entry_points=[CommandHandler("now", now)],
         states={
-            INSTITUTION: [CallbackQueryHandler(now_institution)],
-            AREA: [CallbackQueryHandler(now_area)],
-            FITTING: [CallbackQueryHandler(now_fitting)],
-            DATE: [MessageHandler(Filters.regex('^(3[01]|[12][0-9]|0?[1-9])\.(1[012]|0?[1-9])\.((?:19|20)\d{2})$'), now_date)],
-            FROM_TIME: [MessageHandler(Filters.regex('^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'), now_from_time)],
-            TO_TIME: [MessageHandler(Filters.regex('^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'), now_to_time_now)]
+            NOW_INSTITUTION: [CallbackQueryHandler(now_institution)],
+            NOW_AREA: [CallbackQueryHandler(now_area)],
+            NOW_FITTING: [CallbackQueryHandler(now_fitting)],
+            NOW_DATE: [MessageHandler(Filters.regex('^(3[01]|[12][0-9]|0?[1-9])\.(1[012]|0?[1-9])\.((?:19|20)\d{2})$'), now_date)],
+            NOW_FROM_TIME: [MessageHandler(Filters.regex('^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'), now_from_time)],
+            NOW_TO_TIME: [MessageHandler(Filters.regex('^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'), now_to_time_now)]
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
