@@ -1,5 +1,9 @@
 FROM python:3.9.5-slim
 
+ENV TZ=Europe/Berlin
+
+RUN date
+
 WORKDIR /usr/src/app
 
 COPY . .
