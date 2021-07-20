@@ -58,7 +58,7 @@ def try_booking(spam_request):
                     send_message(spam_request['chat_id'], f"Du hast Platz {result['workspaceId']} gebucht.")
                     running = False
 
-                elif not msg.startswith("info#"):
+                elif (not msg.startswith("info#")) or (not msg == ""):
 
                     try:
                         error_msg = error_dict[msg]
